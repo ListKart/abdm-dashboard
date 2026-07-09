@@ -1,0 +1,56 @@
+name: Live Sync Google Sheets Data
+
+on:
+  repository_dispatch:
+    types: [trigger-sync] # Triggered instantly by the Dashboard refresh button
+  schedule:
+    - cron: '*/30 * * * *' # Backup automatic sync every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Fetch Google Sheets CSV and Save as JSON
+        run: |
+          curl -L -o sheet.csv "https://docs.google.com/spreadsheets/d/e/2PACX-1vQgNbWmqu9_vIsBzTtRHokDNUPqhEOyEF7v7xWxdDse34yKPDg7p6jv-8eGgD1e1w/pub?gid=166502810&single=true&output=csv"
+          
+          python -c "
+          import csv, json
+          data = { 'metrics': {}, 'districts': {} }
+          with open('sheet.csv', mode='r', encoding='utf-8') as f:
+              reader = csv.reader(f)
+              in_district = False
+              for row in reader:
+                  if not row or len(row) < 2:
+                      continue
+                  row = [col.strip() for col in row]
+                  
+                  if row[0] in ['ABHA Cards Created', 'Records Linked (HRL)', 'Verified Facilities (HFR)', 'Verified Professionals (HPR)']:
+                      data['metrics'][row[0]] = {
+                          'overall': row[1],
+                          'today': row[2] if len(row) > 2 else '0',
+                          'month': row[3] if len(row) > 3 else '0'
+                      }
+                  
+                  if row[0] == 'District Name':
+                      in_district = True
+                      continue
+                      
+                  if in_district and row[0] != '':
+                      data['districts'][row[0]] = row[1]
+                      
+          with open('data.json', 'w', encoding='utf-8') as out:
+              json.dump(data, out, indent=2)
+          "
+          
+      - name: Commit and Push JSON
+        run: |
+          git config --global user.name "ListKart-Sync-Bot"
+          git config --global user.email "sync-bot@listkart.github.io"
+          git add data.json
+          git diff-index --quiet HEAD || git commit -m "Live-sync Google Sheet data"
+          git push

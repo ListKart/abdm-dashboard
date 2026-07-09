@@ -1,0 +1,36 @@
+{
+  "metrics": {
+    "ABHA Cards Created": {
+      "overall": "72314418",
+      "today": "4858",
+      "month": "51078"
+    },
+    "Records Linked (HRL)": {
+      "overall": "72610090",
+      "today": "13414",
+      "month": "1307827"
+    },
+    "Verified Facilities (HFR)": {
+      "overall": "52807",
+      "today": "407",
+      "month": "3232"
+    },
+    "Verified Professionals (HPR)": {
+      "overall": "106227",
+      "today": "84",
+      "month": "1148"
+    }
+  },
+  "districts": {
+    "Jaipur": "5797",
+    "Sikar": "2448",
+    "Jhunjhunu": "2215",
+    "Udaipur": "2098",
+    "Ganganagar": "1979",
+    "Hanumangarh": "1967",
+    "Pali": "1760",
+    "Jodhpur": "1741",
+    "Alwar": "1705",
+    "Ajmer": "1552"
+  }
+}
