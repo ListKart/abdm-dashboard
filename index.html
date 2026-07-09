@@ -1142,6 +1142,9 @@ input:checked + .slider:before {
             <section class="dashboard-view active" id="view-abdm-insight">
                 <div class="view-header-filter">
                     <h2 class="view-title">Rajasthan ABDM Insight Dashboard</h2>
+                    <button class="action-btn" id="trigger-github-sync-btn" style="margin-left: 10px; display: flex; align-items: center; gap: 6px; padding: 8px 15px; font-size: 13px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        <i class="fa-solid fa-arrows-rotate"></i> Refresh Live Data
+                    </button>
                     <button class="action-btn-secondary" id="open-settings-btn" style="margin-left: 10px; display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px;" title="Sync settings">
                         <i class="fa-solid fa-gear"></i> Sync Settings
                     </button>
@@ -3953,7 +3956,7 @@ const RAJASTHAN_ABDM_STATS = {
     all: {
         name: 'State Baseline (All Rajasthan)',
         // Real data from ABDM Portal CSVs — 09 Jul 2026
-        abhaCount: 72314334,
+        abhaCount: 72314418,
         abhaToday:    4858,
         abhaMonth:   51078,
         abhaSaturation: 82.4,
@@ -4117,6 +4120,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMultiSelects();
     initTrendCharts();
     
+    // Register dispatch sync button hook
+    const triggerSyncBtn = document.getElementById('trigger-github-sync-btn');
+    if (triggerSyncBtn) {
+        triggerSyncBtn.addEventListener('click', () => {
+            triggerGitHubWorkflowSync();
+        });
+    }
+    
     // Initial Render
     renderActiveView();
     fetchGoogleSheetsLiveData();
@@ -4131,9 +4142,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const fallbackUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgNbWmqu9_vIsBzTtRHokDNUPqhEOyEF7v7xWxdDse34yKPDg7p6jv-8eGgD1e1w/pub?gid=166502810&single=true&output=csv';
 
+    const patInput = document.getElementById('github-pat-token');
+    
     if (openBtn && modal) {
         openBtn.addEventListener('click', () => {
             urlInput.value = window.localStorage.getItem('abdm_sync_url') || fallbackUrl;
+            if (patInput) {
+                patInput.value = window.localStorage.getItem('github_pat') || '';
+            }
             modal.style.display = 'flex';
         });
     }
@@ -4147,6 +4163,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveBtn && modal) {
         saveBtn.addEventListener('click', () => {
             const urlVal = urlInput.value.trim();
+            const patVal = patInput ? patInput.value.trim() : '';
+            
+            if (patVal !== undefined) {
+                window.localStorage.setItem('github_pat', patVal);
+            }
+            
             if (urlVal) {
                 window.localStorage.setItem('abdm_sync_url', urlVal);
                 modal.style.display = 'none';
@@ -7082,137 +7104,130 @@ function renderAdoptionTab() {
 
 
 
-// ── Google Sheets Live Sync ──────────────────────────────────────────────────
-// Smart approach:
-//   • https:// (GitHub Pages / web server) → direct fetch() — no proxy needed
-//   • file://  (local HTML)               → JSONP via script tag (CORS bypass)
-// Both paths parse the same CSV and update RAJASTHAN_ABDM_STATS.all then re-render.
+// ── GitHub Mediated Google Sheets Sync (Works Local file:// & Live https://) ───
+//
+// HOW IT WORKS:
+// 1. Dashboard fetches pre-compiled clean data from GitHub:
+//    https://raw.githubusercontent.com/ListKart/abdm-dashboard/main/data.json
+//    Since raw.githubusercontent.com allows CORS, fetch() works perfectly from file://
+// 2. Refresh button sends a Repository Dispatch API request to GitHub.
+// 3. GitHub instantly runs sync.yml, downloads the latest Google Sheet data,
+//    commits/pushes data.json, and the local dashboard re-renders with the latest numbers!
 // ─────────────────────────────────────────────────────────────────────────────
 
-var SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgNbWmqu9_vIsBzTtRHokDNUPqhEOyEF7v7xWxdDse34yKPDg7p6jv-8eGgD1e1w/pub?gid=166502810&single=true&output=csv';
+var GITHUB_DATA_URL = 'https://raw.githubusercontent.com/ListKart/abdm-dashboard/main/data.json';
 
-function parseSheetCSV(csvText) {
-    var rows = csvText.split(/\r?\n/);
-    var inDistrict = false;
+function parseAndApplyJsonData(jsonData) {
+    try {
+        var metrics = jsonData.metrics;
+        var districts = jsonData.districts;
 
-    rows.forEach(function(row) {
-        var cols = row.split(',').map(function(c) { return c.trim(); });
-        if (cols.length < 2) return;
-
-        if (cols[0] === 'ABHA Cards Created') {
-            RAJASTHAN_ABDM_STATS.all.abhaCount = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.abhaCount;
-            RAJASTHAN_ABDM_STATS.all.abhaToday = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.abhaMonth = parseInt(cols[3].replace(/,/g,'')) || 0;
-        } else if (cols[0] === 'Records Linked (HRL)') {
-            RAJASTHAN_ABDM_STATS.all.hrlCount = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hrlCount;
-            RAJASTHAN_ABDM_STATS.all.hrlToday = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.hrlMonth = parseInt(cols[3].replace(/,/g,'')) || 0;
-        } else if (cols[0] === 'Verified Facilities (HFR)') {
-            RAJASTHAN_ABDM_STATS.all.hfrCount   = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hfrCount;
-            RAJASTHAN_ABDM_STATS.all.hfrToday   = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.hfrMonth   = parseInt(cols[3].replace(/,/g,'')) || 0;
+        if (metrics['ABHA Cards Created']) {
+            RAJASTHAN_ABDM_STATS.all.abhaCount  = parseInt(metrics['ABHA Cards Created'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.abhaCount;
+            RAJASTHAN_ABDM_STATS.all.abhaToday  = parseInt(metrics['ABHA Cards Created'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.abhaMonth  = parseInt(metrics['ABHA Cards Created'].month.replace(/,/g,'')) || 0;
+        }
+        if (metrics['Records Linked (HRL)']) {
+            RAJASTHAN_ABDM_STATS.all.hrlCount   = parseInt(metrics['Records Linked (HRL)'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hrlCount;
+            RAJASTHAN_ABDM_STATS.all.hrlToday   = parseInt(metrics['Records Linked (HRL)'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.hrlMonth   = parseInt(metrics['Records Linked (HRL)'].month.replace(/,/g,'')) || 0;
+        }
+        if (metrics['Verified Facilities (HFR)']) {
+            RAJASTHAN_ABDM_STATS.all.hfrCount   = parseInt(metrics['Verified Facilities (HFR)'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hfrCount;
+            RAJASTHAN_ABDM_STATS.all.hfrToday   = parseInt(metrics['Verified Facilities (HFR)'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.hfrMonth   = parseInt(metrics['Verified Facilities (HFR)'].month.replace(/,/g,'')) || 0;
             RAJASTHAN_ABDM_STATS.all.hfrVerified = Math.round(RAJASTHAN_ABDM_STATS.all.hfrCount * 0.82);
             RAJASTHAN_ABDM_STATS.all.hfrPending  = Math.round(RAJASTHAN_ABDM_STATS.all.hfrCount * 0.18);
-        } else if (cols[0] === 'Verified Professionals (HPR)') {
-            RAJASTHAN_ABDM_STATS.all.hprCount   = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hprCount;
-            RAJASTHAN_ABDM_STATS.all.hprToday   = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.hprMonth   = parseInt(cols[3].replace(/,/g,'')) || 0;
+        }
+        if (metrics['Verified Professionals (HPR)']) {
+            RAJASTHAN_ABDM_STATS.all.hprCount   = parseInt(metrics['Verified Professionals (HPR)'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hprCount;
+            RAJASTHAN_ABDM_STATS.all.hprToday   = parseInt(metrics['Verified Professionals (HPR)'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.hprMonth   = parseInt(metrics['Verified Professionals (HPR)'].month.replace(/,/g,'')) || 0;
             RAJASTHAN_ABDM_STATS.all.hprVerified = Math.round(RAJASTHAN_ABDM_STATS.all.hprCount * 0.78);
             RAJASTHAN_ABDM_STATS.all.hprPending  = Math.round(RAJASTHAN_ABDM_STATS.all.hprCount * 0.22);
         }
 
-        if (cols[0] === 'District Name') { inDistrict = true; return; }
-
-        if (inDistrict && cols[0] !== '') {
-            var count = parseInt(cols[1].replace(/,/g,''));
-            if (!isNaN(count) && RAJASTHAN_ABDM_STATS[cols[0]]) {
-                RAJASTHAN_ABDM_STATS[cols[0]].hfrCount = count;
+        // Apply district-wise counts
+        if (districts) {
+            for (var dist in districts) {
+                var count = parseInt(districts[dist].replace(/,/g,''));
+                if (!isNaN(count) && RAJASTHAN_ABDM_STATS[dist]) {
+                    RAJASTHAN_ABDM_STATS[dist].hfrCount = count;
+                }
             }
         }
-    });
 
-    renderActiveView();
-    showToast('\u2705 Live data from Google Sheet loaded!', 'success');
-}
-
-// ── JSONP callback (for file:// protocol) ────────────────────────────────────
-window.handleGoogleSheetsJsonp = function(response) {
-    var s = document.getElementById('jsonp-sync-script');
-    if (s) s.remove();
-    if (!response || !response.contents) {
-        showToast('Could not reach Google Sheet. Showing baseline data.', 'info');
-        return;
+        renderActiveView();
+        showToast('✅ Latest Google Sheet data loaded successfully!', 'success');
+    } catch (e) {
+        console.error('Error applying JSON data:', e);
+        showToast('Error applying live data.', 'error');
     }
-    try { parseSheetCSV(response.contents); }
-    catch(e) { console.error('CSV parse error:', e); }
-};
+}
 
 function fetchGoogleSheetsLiveData() {
-    var targetUrl = window.localStorage.getItem('abdm_sync_url') || SHEET_CSV_URL;
-    var csvUrl    = targetUrl + (targetUrl.indexOf('?') !== -1 ? '&' : '?') + 'cb=' + Date.now();
+    var url = GITHUB_DATA_URL + '?cb=' + Date.now();
+    showToast('Loading latest data from GitHub...', 'info');
 
-    showToast('Syncing live data from Google Sheet\u2026', 'info');
+    fetch(url)
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(function(data) {
+            parseAndApplyJsonData(data);
+        })
+        .catch(function(err) {
+            console.error('Failed to load JSON from GitHub, using cached baseline', err);
+            showToast('⚠️ Offline: Using baseline data.', 'info');
+        });
+}
 
-    // ── Path A: https:// protocol (GitHub Pages / server) ───────────────────
-    // Direct fetch works perfectly — Google Sheets published CSVs allow CORS
-    if (location.protocol === 'https:') {
-        fetch(csvUrl)
-            .then(function(res) {
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.text();
-            })
-            .then(function(csv) { parseSheetCSV(csv); })
-            .catch(function(err) {
-                console.warn('Direct fetch failed, trying proxy...', err);
-                // fallback to proxy on https too
-                fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(csvUrl))
-                    .then(function(r) { return r.text(); })
-                    .then(function(csv) { parseSheetCSV(csv); })
-                    .catch(function() {
-                        showToast('\u26a0\ufe0f Could not reach Sheet. Showing baseline data.', 'info');
-                    });
-            });
+// Function to trigger GitHub Action sync via API dispatch event
+function triggerGitHubWorkflowSync() {
+    var pat = window.localStorage.getItem('github_pat') || '';
+    if (!pat) {
+        showToast('🔑 Please set your GitHub Token in settings first!', 'warning');
+        openSettingsModal(); // helper function to pop open settings
         return;
     }
 
-    // ── Path B: file:// protocol (local HTML) ────────────────────────────────
-    // fetch() is CORS-blocked from file:// (origin=null).
-    // <script> tags bypass CORS — JSONP is the only option.
-    // Try three JSONP proxies in sequence with 8s timeout each.
-    var JSONP_PROXIES = [
-        'https://api.allorigins.win/get?url=' + encodeURIComponent(csvUrl) + '&callback=handleGoogleSheetsJsonp',
-        'https://jsonp.digitallocker.gov.in/?url=' + encodeURIComponent(csvUrl) + '&callback=handleGoogleSheetsJsonp'
-    ];
-    var proxyIndex = 0;
+    showToast('🚀 Sending sync trigger to GitHub...', 'info');
 
-    function tryNextProxy() {
-        if (proxyIndex >= JSONP_PROXIES.length) {
-            showToast('\u26a0\ufe0f Offline: Showing baseline data (sheet unreachable).', 'info');
-            return;
+    fetch('https://api.github.com/repos/ListKart/abdm-dashboard/dispatches', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'token ' + pat,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            event_type: 'trigger-sync'
+        })
+    })
+    .then(function(res) {
+        if (res.status === 204) {
+            showToast('🔄 GitHub sync triggered! Re-fetching data in 5 seconds...', 'success');
+            // Wait 5 seconds for GitHub action to download and push, then fetch
+            setTimeout(function() {
+                fetchGoogleSheetsLiveData();
+            }, 6000);
+        } else {
+            throw new Error('API returned status: ' + res.status);
         }
-        var old = document.getElementById('jsonp-sync-script');
-        if (old) old.remove();
-
-        var script = document.createElement('script');
-        script.id  = 'jsonp-sync-script';
-        script.src = JSONP_PROXIES[proxyIndex++];
-
-        var timer = setTimeout(function() {
-            var s = document.getElementById('jsonp-sync-script');
-            if (s) { s.remove(); tryNextProxy(); }
-        }, 8000);
-
-        script.onload = function() { clearTimeout(timer); };
-        script.onerror = function() {
-            clearTimeout(timer);
-            this.remove();
-            tryNextProxy();
-        };
-        document.body.appendChild(script);
-    }
-
-    tryNextProxy();
+    })
+    .catch(function(err) {
+        console.error('GitHub API error:', err);
+        showToast('❌ Trigger failed. Verify your GitHub Token.', 'error');
+    });
 }
+
+// Open settings helper
+function openSettingsModal() {
+    var modal = document.getElementById('settings-modal');
+    if (modal) modal.style.display = 'block';
+}
+
 
 
 
@@ -7235,6 +7250,11 @@ function fetchGoogleSheetsLiveData() {
                 <div class="form-group" style="margin-bottom: 16px;">
                     <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Data Source URL:</label>
                     <input type="text" id="sync-source-url" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box;" placeholder="Paste Gist raw URL or published CSV link here...">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">GitHub Personal Access Token (PAT):</label>
+                    <input type="password" id="github-pat-token" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box;" placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxx">
+                    <p style="margin: 4px 0 0 0; font-size: 10px; color: #64748b; line-height: 1.4;">Create a token on GitHub with <b>repo</b> scope to allow remote trigger from this dashboard.</p>
                 </div>
 
                 <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; border-left: 4px solid #1e3a8a; margin-bottom: 20px;">
