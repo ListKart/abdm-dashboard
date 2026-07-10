@@ -7141,7 +7141,7 @@ function parseAndApplyJsonData(jsonData) {
         // Apply district-wise counts (registering them dynamically if they don't exist)
         if (districts) {
             for (var dist in districts) {
-                var count = parseInt(districts[dist].replace(/,/g,''));
+                var count = parseInt(districts[dist].toString().replace(/,/g,''));
                 if (!isNaN(count)) {
                     // Normalize district names to match dashboard expectation
                     var cleanName = dist.trim();
