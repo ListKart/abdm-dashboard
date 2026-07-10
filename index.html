@@ -7165,26 +7165,21 @@ window.handleGoogleSheetsJsonp = function(response) {
 };
 
 function fetchGoogleSheetsLiveData() {
-    // Direct Google Sheets Visualization API URL (Allows CORS by default on local file://)
-    var sheetId = '1zC0vPjig--Rz1ar9BEE8zW0p6b5-Vtm-';
-    var sheetName = 'ABDM_Insight_Summary';
-    var directUrl = 'https://docs.google.com/spreadsheets/d/' + sheetId + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(sheetName) + '&cb=' + Date.now();
+    var scriptUrl = 'https://script.google.com/macros/s/AKfycbw012JZd2SSROto0ZVgRUawP9AoncG2vV405uRSnHyTXPWE7UI-3LFFGSqIgzVCkRogmg/exec?cb=' + Date.now();
 
     showToast('Syncing live data directly from Google Sheet...', 'info');
 
-    fetch(directUrl)
+    fetch(scriptUrl)
         .then(function(res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.text();
+            return res.json();
         })
-        .then(function(csvText) {
-            // Clean up the Visualization API wrapped CSV if necessary
-            // The API output is a standard CSV string representing the sheet
-            parseSheetCSV(csvText);
+        .then(function(jsonData) {
+            parseAndApplyJsonData(jsonData);
         })
         .catch(function(err) {
-            console.error('Direct fetch failed:', err);
-            showToast('⚠️ Direct sync failed. Verify internet connection.', 'error');
+            console.error('Direct Google Apps Script fetch failed:', err);
+            showToast('⚠️ Could not connect to Google Sheet. Check URL or internet.', 'error');
         });
 }
 </script>
