@@ -7165,41 +7165,27 @@ window.handleGoogleSheetsJsonp = function(response) {
 };
 
 function fetchGoogleSheetsLiveData() {
-    var csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgNbWmqu9_vIsBzTtRHokDNUPqhEOyEF7v7xWxdDse34yKPDg7p6jv-8eGgD1e1w/pub?gid=166502810&single=true&output=csv&cb=' + Date.now();
-    showToast('Syncing live data from Google Sheet...', 'info');
+    // Direct Google Sheets Visualization API URL (Allows CORS by default on local file://)
+    var sheetId = '1zC0vPjig--Rz1ar9BEE8zW0p6b5-Vtm-';
+    var sheetName = 'ABDM_Insight_Summary';
+    var directUrl = 'https://docs.google.com/spreadsheets/d/' + sheetId + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(sheetName) + '&cb=' + Date.now();
 
-    // If live on HTTPS (GitHub Pages/web server), direct fetch is perfectly supported with CORS by Google
-    if (location.protocol === 'https:') {
-        fetch(csvUrl)
-            .then(function(res) {
-                if (!res.ok) throw new Error();
-                return res.text();
-            })
-            .then(function(csv) { parseSheetCSV(csv); })
-            .catch(function() {
-                // Fallback to proxy
-                var proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(csvUrl) + '&callback=handleGoogleSheetsJsonp';
-                var script = document.createElement('script');
-                script.id = 'jsonp-sync-script';
-                script.src = proxy;
-                document.body.appendChild(script);
-            });
-        return;
-    }
+    showToast('Syncing live data directly from Google Sheet...', 'info');
 
-    // Local file:// mode — use JSONP to bypass CORS instantly without inputs
-    var jsonpUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(csvUrl) + '&callback=handleGoogleSheetsJsonp';
-    var old = document.getElementById('jsonp-sync-script');
-    if (old) old.remove();
-
-    var script = document.createElement('script');
-    script.id  = 'jsonp-sync-script';
-    script.src = jsonpUrl;
-    script.onerror = function() {
-        this.remove();
-        showToast('⚠️ Offline: Using cached data.', 'info');
-    };
-    document.body.appendChild(script);
+    fetch(directUrl)
+        .then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        })
+        .then(function(csvText) {
+            // Clean up the Visualization API wrapped CSV if necessary
+            // The API output is a standard CSV string representing the sheet
+            parseSheetCSV(csvText);
+        })
+        .catch(function(err) {
+            console.error('Direct fetch failed:', err);
+            showToast('⚠️ Direct sync failed. Verify internet connection.', 'error');
+        });
 }
 </script>
 
