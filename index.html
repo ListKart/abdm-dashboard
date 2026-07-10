@@ -7104,7 +7104,7 @@ function renderAdoptionTab() {
 //
 // HOW IT WORKS:
 // 1. Dashboard fetches structured JSON directly from the Google Apps Script API:
-//    https://script.google.com/macros/s/AKfycbw012JZd2SSROto0ZVgRUawP9AoncG2vV405uRSnHyTXPWE7UI-3LFFGSqIgzVCkRogmg/exec
+//    https://script.google.com/macros/s/AKfycby-vnPItPvBEnaIg1Xb82-vPk4A_bfgzOUp4BnhjSTSSiFOENKl_miy3ioIaAjljCzU/exec
 // 2. Pressing "Refresh Live Data" will fetch from Apps Script and update the KPIs.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -7181,7 +7181,7 @@ function parseAndApplyJsonData(jsonData) {
 }
 
 function fetchGoogleSheetsLiveData() {
-    var scriptUrl = 'https://script.google.com/macros/s/AKfycbw012JZd2SSROto0ZVgRUawP9AoncG2vV405uRSnHyTXPWE7UI-3LFFGSqIgzVCkRogmg/exec?cb=' + Date.now();
+    var scriptUrl = 'https://script.google.com/macros/s/AKfycby-vnPItPvBEnaIg1Xb82-vPk4A_bfgzOUp4BnhjSTSSiFOENKl_miy3ioIaAjljCzU/exec?cb=' + Date.now();
     showToast('Syncing live data from Google Sheet Web App...', 'info');
 
     fetch(scriptUrl)
