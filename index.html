@@ -7182,8 +7182,7 @@ function parseAndApplyJsonData(jsonData) {
 
 function fetchGoogleSheetsLiveData() {
     var scriptUrl = 'https://script.google.com/macros/s/AKfycbw012JZd2SSROto0ZVgRUawP9AoncG2vV405uRSnHyTXPWE7UI-3LFFGSqIgzVCkRogmg/exec?cb=' + Date.now();
-
-    showToast('Syncing live data directly from Google Sheet...', 'info');
+    showToast('Syncing live data from Google Sheet Web App...', 'info');
 
     fetch(scriptUrl)
         .then(function(res) {
@@ -7194,7 +7193,7 @@ function fetchGoogleSheetsLiveData() {
             parseAndApplyJsonData(jsonData);
         })
         .catch(function(err) {
-            console.error('Direct Google Apps Script fetch failed:', err);
+            console.error('Apps Script fetch failed:', err);
             showToast('⚠️ Could not connect to Google Sheet. Check URL or internet.', 'error');
         });
 }
