@@ -7103,66 +7103,58 @@ function renderAdoptionTab() {
 // ── Direct Google Sheet Live Fetch (No GitHub / Setup required) ──────────────
 //
 // HOW IT WORKS:
-// 1. Dashboard fetches data directly from the public Google Sheet CSV:
-//    https://docs.google.com/spreadsheets/d/e/2PACX-1vQgNbWmqu9_vIsBzTtRHokDNUPqhEOyEF7v7xWxdDse34yKPDg7p6jv-8eGgD1e1w/pub?gid=166502810&single=true&output=csv
-// 2. Pressing "Refresh Live Data" or saving will fetch directly from Google Sheet and update.
+// 1. Dashboard fetches structured JSON directly from the Google Apps Script API:
+//    https://script.google.com/macros/s/AKfycbw012JZd2SSROto0ZVgRUawP9AoncG2vV405uRSnHyTXPWE7UI-3LFFGSqIgzVCkRogmg/exec
+// 2. Pressing "Refresh Live Data" will fetch from Apps Script and update the KPIs.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseSheetCSV(csvText) {
-    var rows = csvText.split(/\r?\n/);
-    var inDistrict = false;
+function parseAndApplyJsonData(jsonData) {
+    try {
+        var metrics = jsonData.metrics;
+        var districts = jsonData.districts;
 
-    rows.forEach(function(row) {
-        var cols = row.split(',').map(function(c) { return c.trim(); });
-        if (cols.length < 2) return;
-
-        if (cols[0] === 'ABHA Cards Created') {
-            RAJASTHAN_ABDM_STATS.all.abhaCount  = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.abhaCount;
-            RAJASTHAN_ABDM_STATS.all.abhaToday  = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.abhaMonth  = parseInt(cols[3].replace(/,/g,'')) || 0;
-        } else if (cols[0] === 'Records Linked (HRL)') {
-            RAJASTHAN_ABDM_STATS.all.hrlCount   = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hrlCount;
-            RAJASTHAN_ABDM_STATS.all.hrlToday   = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.hrlMonth   = parseInt(cols[3].replace(/,/g,'')) || 0;
-        } else if (cols[0] === 'Verified Facilities (HFR)') {
-            RAJASTHAN_ABDM_STATS.all.hfrCount   = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hfrCount;
-            RAJASTHAN_ABDM_STATS.all.hfrToday   = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.hfrMonth   = parseInt(cols[3].replace(/,/g,'')) || 0;
+        if (metrics['ABHA Cards Created']) {
+            RAJASTHAN_ABDM_STATS.all.abhaCount  = parseInt(metrics['ABHA Cards Created'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.abhaCount;
+            RAJASTHAN_ABDM_STATS.all.abhaToday  = parseInt(metrics['ABHA Cards Created'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.abhaMonth  = parseInt(metrics['ABHA Cards Created'].month.replace(/,/g,'')) || 0;
+        }
+        if (metrics['Records Linked (HRL)']) {
+            RAJASTHAN_ABDM_STATS.all.hrlCount   = parseInt(metrics['Records Linked (HRL)'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hrlCount;
+            RAJASTHAN_ABDM_STATS.all.hrlToday   = parseInt(metrics['Records Linked (HRL)'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.hrlMonth   = parseInt(metrics['Records Linked (HRL)'].month.replace(/,/g,'')) || 0;
+        }
+        if (metrics['Verified Facilities (HFR)']) {
+            RAJASTHAN_ABDM_STATS.all.hfrCount   = parseInt(metrics['Verified Facilities (HFR)'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hfrCount;
+            RAJASTHAN_ABDM_STATS.all.hfrToday   = parseInt(metrics['Verified Facilities (HFR)'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.hfrMonth   = parseInt(metrics['Verified Facilities (HFR)'].month.replace(/,/g,'')) || 0;
             RAJASTHAN_ABDM_STATS.all.hfrVerified = Math.round(RAJASTHAN_ABDM_STATS.all.hfrCount * 0.82);
             RAJASTHAN_ABDM_STATS.all.hfrPending  = Math.round(RAJASTHAN_ABDM_STATS.all.hfrCount * 0.18);
-        } else if (cols[0] === 'Verified Professionals (HPR)') {
-            RAJASTHAN_ABDM_STATS.all.hprCount   = parseInt(cols[1].replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hprCount;
-            RAJASTHAN_ABDM_STATS.all.hprToday   = parseInt(cols[2].replace(/,/g,'')) || 0;
-            RAJASTHAN_ABDM_STATS.all.hprMonth   = parseInt(cols[3].replace(/,/g,'')) || 0;
+        }
+        if (metrics['Verified Professionals (HPR)']) {
+            RAJASTHAN_ABDM_STATS.all.hprCount   = parseInt(metrics['Verified Professionals (HPR)'].overall.replace(/,/g,'')) || RAJASTHAN_ABDM_STATS.all.hprCount;
+            RAJASTHAN_ABDM_STATS.all.hprToday   = parseInt(metrics['Verified Professionals (HPR)'].today.replace(/,/g,'')) || 0;
+            RAJASTHAN_ABDM_STATS.all.hprMonth   = parseInt(metrics['Verified Professionals (HPR)'].month.replace(/,/g,'')) || 0;
             RAJASTHAN_ABDM_STATS.all.hprVerified = Math.round(RAJASTHAN_ABDM_STATS.all.hprCount * 0.78);
             RAJASTHAN_ABDM_STATS.all.hprPending  = Math.round(RAJASTHAN_ABDM_STATS.all.hprCount * 0.22);
         }
 
-        if (cols[0] === 'District Name') { inDistrict = true; return; }
-
-        if (inDistrict && cols[0] !== '') {
-            var count = parseInt(cols[1].replace(/,/g,''));
-            if (!isNaN(count) && RAJASTHAN_ABDM_STATS[cols[0]]) {
-                RAJASTHAN_ABDM_STATS[cols[0]].hfrCount = count;
+        // Apply district-wise counts
+        if (districts) {
+            for (var dist in districts) {
+                var count = parseInt(districts[dist].replace(/,/g,''));
+                if (!isNaN(count) && RAJASTHAN_ABDM_STATS[dist]) {
+                    RAJASTHAN_ABDM_STATS[dist].hfrCount = count;
+                }
             }
         }
-    });
 
-    renderActiveView();
-    showToast('✅ Google Sheet Live data synced!', 'success');
-}
-
-// Global JSONP callback
-window.handleGoogleSheetsJsonp = function(response) {
-    var s = document.getElementById('jsonp-sync-script');
-    if (s) s.remove();
-    if (!response || !response.contents) {
-        showToast('Offline: Using cached data.', 'info');
-        return;
+        renderActiveView();
+        showToast('✅ Google Sheet Live data synced!', 'success');
+    } catch (e) {
+        console.error('Error applying JSON data:', e);
+        showToast('Error parsing live data.', 'error');
     }
-    try { parseSheetCSV(response.contents); }
-    catch(e) { console.error('Sheet CSV parse error:', e); }
-};
+}
 
 function fetchGoogleSheetsLiveData() {
     var scriptUrl = 'https://script.google.com/macros/s/AKfycbw012JZd2SSROto0ZVgRUawP9AoncG2vV405uRSnHyTXPWE7UI-3LFFGSqIgzVCkRogmg/exec?cb=' + Date.now();
